@@ -1,21 +1,23 @@
-// app/layout.tsx
-import './globals.css';
-import { ReactNode } from 'react';
-import { AuthProvider } from '@/components/AuthProvider';
-import ExposeSupabaseClient from '@/components/ExposeSupabaseClient';
+// src/app/layout.tsx
+import type { Metadata } from 'next'
+import './globals.css'
+import { AuthProvider } from '@/components/AuthProvider'
 
-export const metadata = { title: 'Mi App' };
+export const metadata: Metadata = {
+  title: 'Horómetros App',
+  description: 'Demo login + dashboard',
+}
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   return (
     <html lang="es">
-      <body>
-        <AuthProvider>
-          {/* Este componente solo expone el cliente en window para debug */}
-          <ExposeSupabaseClient />
-          {children}
-        </AuthProvider>
+      <body className="bg-slate-100">
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
-  );
+  )
 }

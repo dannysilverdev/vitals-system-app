@@ -1,140 +1,103 @@
-'use client';
+'use client'
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabaseClient'
+import { useAuth } from '@/components/AuthProvider'
 
 export default function LoginPage() {
-  const router = useRouter();
+  const router = useRouter()
+  const { session, loading: authLoading } = useAuth()
 
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [lastResponse, setLastResponse] = useState<any>(null);
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  async function handleRedirect(target: string) {
-    try {
-      router.replace(target);
-      // fallback por si router falla en este entorno
-      setTimeout(() => {
-        if (typeof window !== 'undefined' && window.location.pathname !== target) {
-          window.location.href = target;
-        }
-      }, 150);
-    } catch {
-      if (typeof window !== 'undefined') window.location.href = target;
+  // Redirigir si ya hay sesión (en efecto, no en render)
+  useEffect(() => {
+    if (!authLoading && session) {
+      router.replace('/dashboard')
     }
+  }, [authLoading, session, router])
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    setLoading(true)
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    setLoading(false)
+
+    if (error) {
+      setError(error.message)
+      return
+    }
+
+    router.replace('/dashboard')
   }
 
-  async function login(e?: React.FormEvent) {
-    if (e) e.preventDefault();
-    setLoading(true);
-    setErrorMsg(null);
-    setLastResponse(null);
+  if (authLoading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+        <p className="text-sm text-slate-600">Verificando sesión…</p>
+      </main>
+    )
+  }
 
-    try {
-      console.log('Intentando login con', email);
-      const res = await supabase.auth.signInWithPassword({
-        email,
-        password: pass,
-      });
-
-      console.log('supabase.login response', res);
-      setLastResponse(res);
-
-      // Manejo de errores de supabase v2
-      if (res.error) {
-        setErrorMsg(res.error.message ?? JSON.stringify(res.error));
-        return;
-      }
-
-      const session = (res.data as any)?.session ?? null;
-      if (!session) {
-        setErrorMsg('No se obtuvo sesión. Revisa la consola para más info.');
-        return;
-      }
-
-      // Intentar leer profile.approved — si tu RLS lo permite desde el cliente
-      try {
-        const userId = session.user?.id;
-        if (userId) {
-          const { data: profileData, error: profileError } = await supabase
-            .from('profiles')
-            .select('approved')
-            .eq('id', userId)
-            .single();
-
-          if (profileError) {
-            // Si hay error al leer profile, no bloqueamos: solo redirigimos al dashboard
-            console.warn('No se pudo leer profile:', profileError);
-            await handleRedirect('/dashboard');
-            return;
-          }
-
-          const approved = (profileData as any)?.approved;
-          if (approved === false) {
-            await handleRedirect('/awaiting-approval');
-            return;
-          } else {
-            await handleRedirect('/dashboard');
-            return;
-          }
-        } else {
-          // sin userId (improbable) → ir a dashboard
-          await handleRedirect('/dashboard');
-          return;
-        }
-      } catch (err) {
-        console.error('Error verificando profile.approved:', err);
-        // si falla la verificación, redirigimos igual al dashboard
-        await handleRedirect('/dashboard');
-        return;
-      }
-    } catch (err: any) {
-      console.error('login exception', err);
-      setErrorMsg(err?.message ?? String(err));
-    } finally {
-      setLoading(false);
-    }
+  if (session) {
+    return null
   }
 
   return (
-    <main style={{ maxWidth: 520, margin: '3rem auto', padding: 20 }}>
-      <h2>Iniciar sesión</h2>
+    <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow border border-slate-200 p-6 space-y-4">
+        <h1 className="text-lg font-semibold text-slate-900">
+          Iniciar sesión
+        </h1>
 
-      <form onSubmit={login} style={{ display: 'grid', gap: 8, marginTop: 12 }}>
-        <input
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="Correo"
-          type="email"
-          style={{ width: '100%', padding: 8 }}
-          required
-        />
+        {error && (
+          <div className="bg-red-100 text-red-700 text-sm px-3 py-2 rounded">
+            {error}
+          </div>
+        )}
 
-        <input
-          value={pass}
-          onChange={(e) => setPass(e.target.value)}
-          placeholder="Contraseña"
-          type="password"
-          style={{ width: '100%', padding: 8 }}
-          required
-        />
+        <form onSubmit={handleLogin} className="space-y-3">
+          <div>
+            <label className="text-sm text-slate-700">Correo</label>
+            <input
+              type="email"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+            />
+          </div>
 
-        {errorMsg && <div style={{ color: 'red' }}>{errorMsg}</div>}
+          <div>
+            <label className="text-sm text-slate-700">Contraseña</label>
+            <input
+              type="password"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+            />
+          </div>
 
-        <button type="submit" disabled={loading || !email || !pass} style={{ padding: 10, marginTop: 8 }}>
-          {loading ? 'Ingresando...' : 'Entrar'}
-        </button>
-      </form>
-
-      {lastResponse && (
-        <section style={{ marginTop: 16, padding: 10, border: '1px solid #eee', borderRadius: 6 }}>
-          <strong>Última respuesta (debug):</strong>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, marginTop: 8 }}>{JSON.stringify(lastResponse, null, 2)}</pre>
-        </section>
-      )}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold py-2 rounded-lg disabled:bg-slate-400"
+          >
+            {loading ? 'Ingresando…' : 'Ingresar'}
+          </button>
+        </form>
+      </div>
     </main>
-  );
+  )
 }

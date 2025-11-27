@@ -1,133 +1,149 @@
-'use client';
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+'use client'
 
-type Company = { id: string; name: string };
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react'
+import { supabase } from '@/lib/supabaseClient'
+import type { Session, User } from '@supabase/supabase-js'
+
 type Profile = {
-  id: string;
-  full_name?: string | null;
-  company_id?: string | null;
-  role?: string | null;
-  approved?: boolean | null;
-  companies?: Company[];
-};
+  id: string
+  user_id: string
+  full_name: string | null
+  company_name: string | null
+}
 
-type AuthContextValue = {
-  session: Session | null;
-  profile: Profile | null;
-  companyName: string | null;
-  loading: boolean;
-  signOut: () => Promise<void>;
-};
+type AuthContextType = {
+  session: Session | null
+  user: User | null
+  profile: Profile | null
+  loading: boolean
+  error: string | null
+  refreshProfile: () => Promise<void>
+  signOut: () => Promise<void>
+}
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [companyName, setCompanyName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const router = useRouter();
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [session, setSession] = useState<Session | null>(null)
+  const [user, setUser] = useState<User | null>(null)
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let mounted = true;
+    const init = async () => {
+      setLoading(true)
+      setError(null)
 
-    async function load() {
-      setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session ?? null);
+      const { data, error } = await supabase.auth.getSession()
 
-      if (!session) {
-        setProfile(null);
-        setCompanyName(null);
-        setLoading(false);
-        return;
+      if (error) {
+        console.error('Error getting session:', error)
+        setSession(null)
+        setUser(null)
+        setProfile(null)
+        setError('No se pudo obtener la sesión')
+        setLoading(false)
+        return
       }
 
-      const userId = session.user.id;
+      const currentSession = data.session ?? null
+      setSession(currentSession)
+      setUser(currentSession?.user ?? null)
+
+      if (currentSession?.user) {
+        await loadProfile(currentSession.user.id)
+      } else {
+        setProfile(null)
+      }
+
+      setLoading(false)
+    }
+
+    init()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      setSession(newSession)
+      setUser(newSession?.user ?? null)
+      if (newSession?.user) {
+        await loadProfile(newSession.user.id)
+      } else {
+        setProfile(null)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const loadProfile = async (userId: string) => {
+    try {
+      setError(null)
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, role, company_id, approved, companies (id, name)')
-        .eq('id', userId)
-        .single();
+        .select('id, user_id, full_name, company_name')
+        .eq('user_id', userId)
+        .maybeSingle()
 
-      if (error) {
-        console.error('Error loading profile:', error);
-        setProfile(null);
-        setCompanyName(null);
-      } else {
-        const p = data as Profile;
-        setProfile(p);
-        const nameFromJoin = p?.companies?.[0]?.name ?? null;
-        if (nameFromJoin) setCompanyName(nameFromJoin);
-        else if (p?.company_id) {
-          const { data: c } = await supabase.from('companies').select('id,name').eq('id', p.company_id).single();
-          setCompanyName((c as Company)?.name ?? null);
-        } else {
-          setCompanyName(null);
-        }
-
-        // Si existe profile y no está aprobado: redirigir a awaiting-approval
-        if (p && p.approved === false) {
-          router.push('/awaiting-approval');
-        }
+      if (error && (error as any).message) {
+        console.error('Error loading profile from DB:', error)
+        setProfile(null)
+        setError('No se pudo cargar el perfil')
+        return
       }
 
-      setLoading(false);
+      if (!data) {
+        setProfile(null)
+        return
+      }
+
+      setProfile(data as Profile)
+    } catch (err) {
+      console.error('Unexpected error loading profile:', err)
+      setProfile(null)
+      setError('Error inesperado cargando el perfil')
     }
+  }
 
-    load();
+  const refreshProfile = async () => {
+    if (!user?.id) return
+    await loadProfile(user.id)
+  }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session ?? null);
-      if (session) {
-        (async () => {
-          const userId = session.user.id;
-          const { data } = await supabase
-            .from('profiles')
-            .select('id, full_name, role, company_id, approved, companies (id, name)')
-            .eq('id', userId)
-            .single();
-          const p = data as Profile;
-          setProfile(p ?? null);
-          setCompanyName(p?.companies?.[0]?.name ?? null);
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    setSession(null)
+    setUser(null)
+    setProfile(null)
+  }
 
-          if (p && p.approved === false) {
-            router.push('/awaiting-approval');
-          }
-        })();
-      } else {
-        setProfile(null);
-        setCompanyName(null);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      try { (listener as any)?.subscription?.unsubscribe?.(); } catch (e) {}
-    };
-  }, [router]);
-
-  async function signOut() {
-    await supabase.auth.signOut();
-    setSession(null);
-    setProfile(null);
-    setCompanyName(null);
-    router.push('/login');
+  const value: AuthContextType = {
+    session,
+    user,
+    profile,
+    loading,
+    error,
+    refreshProfile,
+    signOut,
   }
 
   return (
-    <AuthContext.Provider value={{ session, profile, companyName, loading, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  )
+}
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
+export function useAuth(): AuthContextType {
+  const ctx = useContext(AuthContext)
+  if (!ctx) {
+    throw new Error('useAuth debe usarse dentro de <AuthProvider>')
+  }
+  return ctx
 }
