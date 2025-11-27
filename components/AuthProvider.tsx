@@ -22,7 +22,6 @@ type AuthContextType = {
   user: User | null
   profile: Profile | null
   loading: boolean
-  error: string | null
   refreshProfile: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -34,36 +33,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
+  // Cargar sesión al inicio
   useEffect(() => {
     const init = async () => {
-      setLoading(true)
-      setError(null)
+      try {
+        const { data } = await supabase.auth.getSession()
+        const currentSession = data.session ?? null
+        setSession(currentSession)
+        setUser(currentSession?.user ?? null)
 
-      const { data, error } = await supabase.auth.getSession()
-
-      if (error) {
-        console.error('Error getting session:', error)
+        if (currentSession?.user) {
+          await loadProfile(currentSession.user.id)
+        }
+      } catch (e) {
+        console.error('Error getting session:', e)
         setSession(null)
         setUser(null)
         setProfile(null)
-        setError('No se pudo obtener la sesión')
+      } finally {
         setLoading(false)
-        return
       }
-
-      const currentSession = data.session ?? null
-      setSession(currentSession)
-      setUser(currentSession?.user ?? null)
-
-      if (currentSession?.user) {
-        await loadProfile(currentSession.user.id)
-      } else {
-        setProfile(null)
-      }
-
-      setLoading(false)
     }
 
     init()
@@ -73,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
       setUser(newSession?.user ?? null)
+
       if (newSession?.user) {
         await loadProfile(newSession.user.id)
       } else {
@@ -80,13 +71,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [])
 
   const loadProfile = async (userId: string) => {
     try {
-      setError(null)
-
       const { data, error } = await supabase
         .from('profiles')
         .select('id, user_id, full_name, company_name')
@@ -94,9 +85,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .maybeSingle()
 
       if (error && (error as any).message) {
-        console.error('Error loading profile from DB:', error)
+        console.error('Error loading profile:', error)
         setProfile(null)
-        setError('No se pudo cargar el perfil')
         return
       }
 
@@ -109,7 +99,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error('Unexpected error loading profile:', err)
       setProfile(null)
-      setError('Error inesperado cargando el perfil')
     }
   }
 
@@ -130,7 +119,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     loading,
-    error,
     refreshProfile,
     signOut,
   }

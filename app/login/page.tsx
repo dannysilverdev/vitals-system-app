@@ -7,19 +7,19 @@ import { useAuth } from '@/components/AuthProvider'
 
 export default function LoginPage() {
   const router = useRouter()
-  const { session, loading: authLoading } = useAuth()
+  const { session } = useAuth()
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Redirigir si ya hay sesión (en efecto, no en render)
+  // Si ya hay sesión, mandar al dashboard
   useEffect(() => {
-    if (!authLoading && session) {
+    if (session) {
       router.replace('/dashboard')
     }
-  }, [authLoading, session, router])
+  }, [session, router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -41,14 +41,7 @@ export default function LoginPage() {
     router.replace('/dashboard')
   }
 
-  if (authLoading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
-        <p className="text-sm text-slate-600">Verificando sesión…</p>
-      </main>
-    )
-  }
-
+  // Si hay sesión, no mostramos nada (se está redirigiendo)
   if (session) {
     return null
   }
