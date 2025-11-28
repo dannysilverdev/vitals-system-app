@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Si ya hay sesión, mandar al dashboard
+  // Si ya hay sesión → redirigir automáticamente
   useEffect(() => {
     if (session) {
       router.replace('/dashboard')
@@ -41,15 +41,12 @@ export default function LoginPage() {
     router.replace('/dashboard')
   }
 
-  // Si hay sesión, no mostramos nada (se está redirigiendo)
-  if (session) {
-    return null
-  }
+  if (session) return null
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-sm bg-white rounded-2xl shadow border border-slate-200 p-6 space-y-4">
-        <h1 className="text-lg font-semibold text-slate-900">
+        <h1 className="text-lg font-semibold text-slate-900 text-center">
           Iniciar sesión
         </h1>
 
@@ -59,29 +56,32 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={handleLogin} className="space-y-3">
+        <form onSubmit={handleLogin} className="space-y-4">
+          {/* Email */}
           <div>
             <label className="text-sm text-slate-700">Correo</label>
             <input
               type="email"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
             />
           </div>
 
+          {/* Password */}
           <div>
             <label className="text-sm text-slate-700">Contraseña</label>
             <input
               type="password"
-              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-900"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
             />
           </div>
 
+          {/* Button */}
           <button
             type="submit"
             disabled={loading}

@@ -7,7 +7,7 @@ import { useAuth } from '@/components/AuthProvider'
 
 export default function DashboardPage() {
   const router = useRouter()
-  const { session, profile, loading, signOut } = useAuth()
+  const { session, profile, loading } = useAuth()
 
   // Proteger ruta: si no hay sesión, mandar a /login
   useEffect(() => {
@@ -16,8 +16,7 @@ export default function DashboardPage() {
     }
   }, [loading, session, router])
 
-  if (!session && loading) {
-    // Mientras carga por primera vez
+  if (loading && !session) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
         <p className="text-sm text-slate-600">Cargando sesión…</p>
@@ -32,16 +31,10 @@ export default function DashboardPage() {
   const userName = profile?.full_name ?? '(sin nombre)'
   const companyName = profile?.company_name ?? '(sin empresa asociada)'
 
-  // ⬇️ handler explícito para logout
-  const handleLogout = async () => {
-    await signOut()
-    router.replace('/login')
-  }
-
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow border border-slate-200 p-6 space-y-6">
-        {/* Header con usuario + logout */}
+        {/* Header con usuario + "botón" de logout (link) */}
         <header className="flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-500">Usuario</p>
@@ -49,12 +42,12 @@ export default function DashboardPage() {
               {userName}
             </p>
           </div>
-          <button
-            onClick={handleLogout}
+          <Link
+            href="/logout"
             className="text-xs text-red-600 hover:text-red-700"
           >
             Cerrar sesión
-          </button>
+          </Link>
         </header>
 
         {/* Bloque de empresa */}
